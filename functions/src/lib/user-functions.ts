@@ -5,7 +5,7 @@ import * as profile from './profile'
 import {UserData} from '../types/UserData'
 import {UserRecord} from 'firebase-functions/lib/providers/auth'
 
-interface Clames {
+interface Claims {
   role: string
 }
 
@@ -82,7 +82,7 @@ export async function all(recordsPerPage?: number, nextPageToken?: string) {
   try {
     const list = await admin.auth().listUsers(recordsPerPage, nextPageToken)
     return Array.from(list.users).map(record => {
-      const clames = (record.customClaims || {}) as Clames
+      const clames = (record.customClaims || {}) as Claims
       return userDataFromRecord(record, clames.role || '')
     })
   } catch (error) {

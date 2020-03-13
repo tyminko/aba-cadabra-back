@@ -1,7 +1,8 @@
 import * as functions from 'firebase-functions'
 import * as feed from "./feed-functions"
 
-const POST_PATH = 'post/{id}'
+const POSTS_PATH = 'posts/{id}'
+// const POST_PATH = 'post/{id}'
 const POST_PREFIX = 'p-'
 const EVENT_PATH = 'events/{id}'
 const EVENT_PREFIX = 'e-'
@@ -10,20 +11,35 @@ const SALON_PREFIX = 's-'
 const PROG_PATH = 'programme/{id}'
 const PROG_PREFIX = 'pr-'
 
-// POST
-export const createPost = functions.firestore.document(POST_PATH).onCreate(snapshot => {
+// POSTS
+export const createPost = functions.firestore.document(POSTS_PATH).onCreate(snapshot => {
   return feed.setFeedRecord(feed.makePostRef(snapshot.data(), snapshot.id), POST_PREFIX + snapshot.id)
 })
 
-export const updatePost = functions.firestore.document(POST_PATH).onUpdate(change => {
+export const updatePost = functions.firestore.document(POSTS_PATH).onUpdate(change => {
   return feed.setFeedRecord(feed.makePostRef(change.after.data(), change.after.id), POST_PREFIX + change.after.id)
   // const diff = feed.postRefDiff(change.before.data(), change.after.data())
   // return Object.keys(diff).length ? feed.updateFeedRecord(diff, prefix + change.after.id) : null
 })
 
-export const deletePost = functions.firestore.document(POST_PATH).onDelete(snapshot => {
+export const deletePost = functions.firestore.document(POSTS_PATH).onDelete(snapshot => {
   return feed.deleteFeedRecord(POST_PREFIX + snapshot.id)
 })
+
+// // POST
+// export const createPost = functions.firestore.document(POST_PATH).onCreate(snapshot => {
+//   return feed.setFeedRecord(feed.makePostRef(snapshot.data(), snapshot.id), POST_PREFIX + snapshot.id)
+// })
+//
+// export const updatePost = functions.firestore.document(POST_PATH).onUpdate(change => {
+//   return feed.setFeedRecord(feed.makePostRef(change.after.data(), change.after.id), POST_PREFIX + change.after.id)
+//   // const diff = feed.postRefDiff(change.before.data(), change.after.data())
+//   // return Object.keys(diff).length ? feed.updateFeedRecord(diff, prefix + change.after.id) : null
+// })
+//
+// export const deletePost = functions.firestore.document(POST_PATH).onDelete(snapshot => {
+//   return feed.deleteFeedRecord(POST_PREFIX + snapshot.id)
+// })
 
 // EVENT
 export const createEvent = functions.firestore.document(EVENT_PATH).onCreate(snapshot => {

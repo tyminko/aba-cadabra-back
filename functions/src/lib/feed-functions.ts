@@ -1,7 +1,7 @@
 import {db} from "./db"
 import {Change} from "firebase-functions/lib/cloud-functions"
 import {DocumentSnapshot} from "firebase-functions/lib/providers/firestore"
-import {PostRef} from "../types/Post"
+import {Attachment, PostRef} from "../types/Post"
 import {AbaEventRef} from "../types/AbaEvent"
 import {SalonRef} from "../types/Salon"
 
@@ -14,14 +14,32 @@ export function makePostRef ( post: FirebaseFirestore.DocumentData|undefined, id
   if (!post) return null
   const ref: PostRef = {
     postId: id,
-    postType: 'post',
-    date: post.created || new Date().getTime()
+    postType: post.type || 'post',
   }
+  if (post.date || post.endDate) {
+    ref.date = post.date || post.endDate
+  } else {
+    ref.date = post.created || new Date().getTime()
+  }
+  if (post.status) ref.status = post.status
   if (post.author) ref.author = post.author
+  if (post.countNumber) ref.countNumber = post.countNumber
   if (post.title) ref.title = post.title
   if (post.excerpt) ref.excerpt = post.excerpt
-  if (post.thumbnail) ref.thumbnail = post.thumbnail
-  if (post.status) ref.status = post.status
+  if (post.attachments) {
+    if (post.thumbnail && post.attachments.hasOwnProperty(post.thumbnail)) {
+      ref.thumbnail = post.attachments[post.thumbnail]
+    } else {
+      const firstVisualAttachment = Object.values(post.attachments as {[k: string]: Attachment}).find(attachment => {
+        return (attachment.type || '').startsWith('image/') ||
+          attachment.srcSet.hasOwnProperty('full') ||
+          attachment.srcSet.hasOwnProperty('preview')
+      })
+      if (firstVisualAttachment) {
+        ref.thumbnail = firstVisualAttachment
+      }
+    }
+  }
   return ref
 }
 
