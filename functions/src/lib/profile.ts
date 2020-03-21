@@ -9,7 +9,7 @@ const PATH = 'profiles'
 export function create (user: UserRecord) {
   const profileData: Profile = {
     displayName: (user.displayName || user.email) as string,
-    photo: { original: {url: user.photoURL || ''} },
+    photoURL: user.photoURL,
   }
   if ( withUserSearchIndices ) {
     profileData.searchIndices = makeSearchIndices((user.displayName || '').toLocaleLowerCase())
