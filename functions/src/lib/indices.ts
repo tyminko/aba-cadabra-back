@@ -9,10 +9,13 @@ function generateIndices(value: string): string[] {
 }
 
 export default (value: string): string[] => {
-  return value
-    .split(' ')
-    .map(v => v.trim())
-    .filter(v => v !== '')
+  const words = value.split(' ').map(v => v.trim()).filter(v => v !== '')
+  const wordsIndices = words
     .map(v => generateIndices(v))
     .reduce((result, indices) => [...result, ...indices], [])
+  if (words.length > 1) {
+    return [...wordsIndices, ...generateIndices(words.join(' '))]
+  } else {
+    return wordsIndices
+  }
 }
