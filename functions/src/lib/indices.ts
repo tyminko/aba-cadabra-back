@@ -15,6 +15,7 @@ export default (value: string): string[] => {
     .reduce((result, indices) => [...result, ...indices], [])
   if (words.length > 1) {
     return [...wordsIndices, ...generateIndices(words.join(' '))]
+      .filter((str, index, self) => self.indexOf(str) === index)
   } else {
     return wordsIndices
   }
