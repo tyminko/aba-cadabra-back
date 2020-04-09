@@ -1,5 +1,6 @@
 import { db } from './db'
 import { UserRecord } from 'firebase-functions/lib/providers/auth'
+import  * as admin from 'firebase-admin/lib'
 import { withUserSearchIndices } from '../config'
 import makeSearchIndices from './indices'
 import {Profile} from "../types/Profile"
@@ -17,17 +18,18 @@ export function create (user: UserRecord) {
   return db.collection(PATH).doc(user.uid).set(profileData)
 }
 
-export function update (user: UserRecord) {
-  const profile: {[k:string]: any} = db.collection(PATH).doc(user.uid)
+export async function update (user: UserRecord) {
+  const profile: admin.firestore.DocumentReference = db.collection(PATH).doc(user.uid)
+  const profileData = await profile.get().then(snap => snap.data())
   const fields: {[k:string]: any} = {}
-  if (profile.displayName !== user.displayName) {
+  if ((profileData || {}).displayName !== user.displayName) {
     fields.displayName = user.displayName
     if (withUserSearchIndices) {
       fields.searchIndices = makeSearchIndices(fields.displayName.toLocaleLowerCase())
     }
   }
   if (withUserSearchIndices &&
-    !profile.hasOwnProperty('searchIndices') &&
+    !(profileData || {}).hasOwnProperty('searchIndices') &&
     !fields.hasOwnProperty('searchIndices')){
       fields.searchIndices = makeSearchIndices(fields.displayName.toLocaleLowerCase())
   }

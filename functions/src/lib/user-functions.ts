@@ -24,43 +24,35 @@ const userFields = [
 ]
 
 export async function add(data: { [k: string]: any }) {
-  try {
-    if (!data.email) {
-      throw new functions.https.HttpsError('invalid-argument', 'Required filed (Email) is empty.')
-    }
-    if (!data.password) {
-      throw new functions.https.HttpsError('invalid-argument', 'Required filed (Password) is empty.')
-    }
-
-    const dataToAdd = parseUserFields(data)
-    const userRecord = await admin.auth().createUser(dataToAdd)
-    if (data.role) {
-      await admin.auth().setCustomUserClaims(userRecord.uid, {role: data.role})
-    }
-    return userDataFromRecord(userRecord, data.role)
-  } catch (error) {
-    return {error}
+  if (!data.email) {
+    throw new functions.https.HttpsError('invalid-argument', 'Required filed (Email) is empty.')
   }
+  if (!data.password) {
+    throw new functions.https.HttpsError('invalid-argument', 'Required filed (Password) is empty.')
+  }
+
+  const dataToAdd = parseUserFields(data)
+  const userRecord = await admin.auth().createUser(dataToAdd)
+  if (data.role) {
+    await admin.auth().setCustomUserClaims(userRecord.uid, {role: data.role})
+  }
+  return userDataFromRecord(userRecord, data.role)
 }
 
 export async function update(data: { [k: string]: any }) {
-  try {
-    if (!data.id) {
-      throw new functions.https.HttpsError('invalid-argument', 'Required user ID.')
-    }
-    const fieldsToUpdate = parseUserFields(data)
-    if (objectIsEmpty(fieldsToUpdate)) {
-      throw new functions.https.HttpsError('invalid-argument', 'No fields to update.')
-    }
-    const user = await admin.auth().updateUser(data.id, fieldsToUpdate)
-    if (data.role) {
-      await admin.auth().setCustomUserClaims(data.id, {role: data.role})
-    }
-    await profile.update(user)
-    return userDataFromRecord(user, data.role)
-  } catch (error) {
-    return {error}
+  if (!data.id) {
+    throw new functions.https.HttpsError('invalid-argument', 'Required user ID.')
   }
+  const fieldsToUpdate = parseUserFields(data)
+  if (objectIsEmpty(fieldsToUpdate)) {
+    throw new functions.https.HttpsError('invalid-argument', 'No fields to update.')
+  }
+  const user = await admin.auth().updateUser(data.id, fieldsToUpdate)
+  if (data.role) {
+    await admin.auth().setCustomUserClaims(data.id, {role: data.role})
+  }
+  await profile.update(user)
+  return userDataFromRecord(user, data.role)
 }
 
 export async function get(id: string) {
@@ -82,8 +74,8 @@ export async function all(recordsPerPage?: number, nextPageToken?: string) {
   try {
     const list = await admin.auth().listUsers(recordsPerPage, nextPageToken)
     return Array.from(list.users).map(record => {
-      const clames = (record.customClaims || {}) as Claims
-      return userDataFromRecord(record, clames.role || '')
+      const claims = (record.customClaims || {}) as Claims
+      return userDataFromRecord(record, claims.role || '')
     })
   } catch (error) {
     return {error}
