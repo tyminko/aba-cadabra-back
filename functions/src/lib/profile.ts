@@ -47,13 +47,13 @@ export function remove (id: string): Promise<any> {
   return db.collection(PATH).doc(id).delete()
 }
 
-function updateAuthors (uid: string, displayName: string) {
+async function updateAuthors (uid: string, displayName: string) {
   const batch = db.batch()
-  db.collection('posts').where('author.uid', '==', uid)
+  await db.collection('posts').where('author.uid', '==', uid)
     .get()
     .then(snapshot => {
       snapshot.forEach(doc => {
-        batch.update(db.collection('posts').doc(doc.id), { displayName })
+        batch.update(db.collection('posts').doc(doc.id), { 'author.displayName': displayName })
       })
     })
   return batch.commit()
