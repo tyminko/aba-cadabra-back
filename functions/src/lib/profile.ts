@@ -1,6 +1,5 @@
 import { db } from './db'
 import { UserRecord } from 'firebase-functions/lib/providers/auth'
-import  * as admin from 'firebase-admin/lib'
 import { withUserSearchIndices } from '../config'
 import makeSearchIndices from './indices'
 import {Profile} from "../types/Profile"
@@ -19,7 +18,7 @@ export function create (user: UserRecord) {
 }
 
 export async function update (user: UserRecord) {
-  const profile: admin.firestore.DocumentReference = db.collection(PATH).doc(user.uid)
+  const profile = db.collection(PATH).doc(user.uid)
   const profileData = await profile.get().then(snap => snap.data())
   const fields: {[k:string]: any} = {}
   if ((profileData || {}).displayName !== user.displayName) {
@@ -33,9 +32,29 @@ export async function update (user: UserRecord) {
     !fields.hasOwnProperty('searchIndices')){
       fields.searchIndices = makeSearchIndices(fields.displayName.toLocaleLowerCase())
   }
-  return Object.keys(fields).length ? profile.update(fields) : null
+  if (Object.keys(fields).length) {
+    return profile.update(fields).then(() => {
+      if (fields.displayName) {
+        return updateAuthors(user.uid, fields.displayName)
+      }
+      return null
+    })
+  }
+  return null
 }
 
 export function remove (id: string): Promise<any> {
   return db.collection(PATH).doc(id).delete()
+}
+
+function updateAuthors (uid: string, displayName: string) {
+  const batch = db.batch()
+  db.collection('posts').where('author.uid', '==', uid)
+    .get()
+    .then(snapshot => {
+      snapshot.forEach(doc => {
+        batch.update(db.collection('posts').doc(doc.id), { displayName })
+      })
+    })
+  return batch.commit()
 }
