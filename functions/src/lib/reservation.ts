@@ -22,7 +22,7 @@ interface ReservationData {
   email: string,
   name: string,
 }
-export const makeReservation = functions.https.onCall(async (data:ReservationData, context) => {
+export const make = functions.https.onCall(async (data:ReservationData, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('failed-precondition', 'Unauthorized access.')
   }
@@ -31,30 +31,80 @@ export const makeReservation = functions.https.onCall(async (data:ReservationDat
   }
   if (!data.email) {
     throw new functions.https.HttpsError('invalid-argument', 'Required filed (Email) is empty.')
+  } else if (!emailIsValid(data.email)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Email is not valid.')
   }
-  const resId = base64(data.email)
-  const resData = { ...data, token: randomString() + base64(new Date().getTime().toString()) + resId }
-  await db.collection('posts').doc(data.eventId)
-    .collection('reservations').doc(resId).set(resData)
-  await db.collection('email').add({
+  const userId = context.auth.uid
+  const reservationId = base64(data.email)
+  const resData = {
+    uid: context.auth.uid,
+    name: data.name || null,
+    email: data.email,
+    token: randomString() + base64(new Date().getTime().toString()) + reservationId,
+    status: 'pending',
+  }
+  const reservationDocRef = db.collection('posts').doc(data.eventId).collection('reservations').doc(reservationId)
+  const mailDocRef = db.collection('mail').doc(userId)
+
+  await reservationDocRef.get()
+    .then((resDoc):any => {
+      if (resDoc.exists) {
+        const reservation = resDoc.data() || {}
+        if (reservation.status === 'pending') {
+          return mailDocRef.get()
+            .then(mailDoc => {
+              if (mailDoc.exists) {
+                const mail = mailDoc.data() || {}
+                switch (mail.state) {
+                  case 'PENDING':
+                  case 'PROCESSING':
+                    throw new functions.https.HttpsError('already-exists', 'Email is on the way.')
+                  case 'ERROR':
+                    throw new functions.https.HttpsError('already-exists', 'Email delivery error: ' + mail.error)
+                  case 'SUCCESS':
+                  default:
+                    return mailDocRef.update({state: 'RETRY'})
+                }
+              } else {
+                return mailDocRef.set(emailDoc({...data, token: resData.token}))
+              }
+            })
+        } else if (reservation.status === 'confirmed') {
+          throw new functions.https.HttpsError('already-exists', 'Reservation already confirmed.')
+        }
+      }
+      return Promise.all([
+        reservationDocRef.set(resData),
+        mailDocRef.set(emailDoc({...data, token: resData.token}))
+      ])
+    })
+  return reservationId
+})
+
+function emailIsValid (email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+function emailDoc (data: ReservationData) {
+  return {
     to: data.email,
     message: {
       subject: `${data.eventInfo.title} reservation`,
-      html: reservationHTML(resData),
+      html: reservationHTML(data),
     }
-  })
-  return resId
-})
+  }
+}
 
 function reservationHTML (resData: ReservationData): string {
-  const url = resData.eventUrl + resData.eventId + `/reservation/` + resData.token
+  const url = resData.eventUrl + `/reservation/` + resData.token
   const eventInfo = resData.eventInfo
   let html = ''
   if (resData.name) {
     html = `Dear ${resData.name},`
   }
-  html += `<p>Thank you for your interest in<br>
-<span class="title">${eventInfo.title}</span> on <span class='date'>${eventInfo.dateString}</span> at ${eventInfo.locationString}.</p>
+  html += `<p>Thank you for your interest in our event:<br>
+<h2 class="title">${eventInfo.title}</h2>
+<div class='date'>${eventInfo.dateString}</div> at ${eventInfo.locationString}.</p>
 <p>To complete your reservation, pleas click on the link below:</p>
 <p><a href="${url}">${url}</a></p>
 <p class='footnote'>If you haven't requested the reservation, just ignore this email.</p>
