@@ -22,6 +22,34 @@ interface ReservationData {
   email: string,
   name: string,
 }
+
+export const confirm = functions.https.onCall(async (data:ReservationData, context) => {
+  if (!data.eventId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Event Id is empty.')
+  }
+  if (!data.token) {
+    throw new functions.https.HttpsError('invalid-argument', 'Token is empty.')
+  }
+  const eventRef = db.collection('posts').doc(data.eventId)
+  const reservationsRef = eventRef.collection('reservations')
+  const resSnapshot = await reservationsRef.where('token', '==', data.token).limit(1).get()
+  if (resSnapshot.empty) {
+    throw new functions.https.HttpsError('not-found', 'Token not found')
+  }
+  const doc = resSnapshot.docs[0]
+  const reservation = doc.data() || {}
+  if (reservation.status === 'pending') {
+    const batch = db.batch()
+    batch.update(reservationsRef.doc(doc.id), {status: 'confirmed'})
+    batch.update(eventRef, {
+      reservationsConfirmed: admin.firestore.FieldValue.arrayUnion(data.token),
+      reservationsPending: admin.firestore.FieldValue.arrayRemove(data.token)
+    })
+    await batch.commit()
+  }
+  return reservation
+})
+
 export const make = functions.https.onCall(async (data:ReservationData, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError('failed-precondition', 'Unauthorized access.')
@@ -43,7 +71,8 @@ export const make = functions.https.onCall(async (data:ReservationData, context)
     token: randomString() + base64(new Date().getTime().toString()) + reservationId,
     status: 'pending',
   }
-  const reservationDocRef = db.collection('posts').doc(data.eventId).collection('reservations').doc(reservationId)
+  const eventRef = db.collection('posts').doc(data.eventId)
+  const reservationDocRef = eventRef.collection('reservations').doc(reservationId)
   const mailDocRef = db.collection('mail').doc(userId)
 
   await reservationDocRef.get()
@@ -55,7 +84,7 @@ export const make = functions.https.onCall(async (data:ReservationData, context)
             .then(mailDoc => {
               if (mailDoc.exists) {
                 const mail = mailDoc.data() || {}
-                switch (mail.state) {
+                switch ((mail.delivery || {}).state) {
                   case 'PENDING':
                   case 'PROCESSING':
                     throw new functions.https.HttpsError('already-exists', 'Email is on the way.')
@@ -63,7 +92,7 @@ export const make = functions.https.onCall(async (data:ReservationData, context)
                     throw new functions.https.HttpsError('already-exists', 'Email delivery error: ' + mail.error)
                   case 'SUCCESS':
                   default:
-                    return mailDocRef.update({state: 'RETRY'})
+                    return mailDocRef.update({ ...emailDoc({...data, token: reservation.token}), 'delivery.state': 'RETRY' })
                 }
               } else {
                 return mailDocRef.set(emailDoc({...data, token: resData.token}))
@@ -73,10 +102,11 @@ export const make = functions.https.onCall(async (data:ReservationData, context)
           throw new functions.https.HttpsError('already-exists', 'Reservation already confirmed.')
         }
       }
-      return Promise.all([
-        reservationDocRef.set(resData),
-        mailDocRef.set(emailDoc({...data, token: resData.token}))
-      ])
+      const batch = db.batch()
+      batch.set(reservationDocRef, resData)
+      batch.set(mailDocRef, {...emailDoc({...data, token: resData.token}), delivery: {state: 'PENDING'}})
+      batch.update(eventRef, {reservationsPending: admin.firestore.FieldValue.arrayUnion(resData.token)})
+      return batch.commit()
     })
   return reservationId
 })
@@ -96,7 +126,7 @@ function emailDoc (data: ReservationData) {
 }
 
 function reservationHTML (resData: ReservationData): string {
-  const url = resData.eventUrl + `/reservation/` + resData.token
+  const url = resData.eventUrl + `/` + resData.token
   const eventInfo = resData.eventInfo
   let html = ''
   if (resData.name) {
@@ -108,7 +138,10 @@ function reservationHTML (resData: ReservationData): string {
 <p>To complete your reservation, pleas click on the link below:</p>
 <p><a href="${url}">${url}</a></p>
 <p class='footnote'>If you haven't requested the reservation, just ignore this email.</p>
-<p>ABA</p>`
+<p>ABA</p>
+<p>
+<a href="{unsubscribe:${resData.eventUrl + `/reservation/unsubscribe/` + resData.token}}"><i><small>Unsubscribe</small></i></a>
+</p>`
   return html
 }
 
