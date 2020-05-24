@@ -7,13 +7,13 @@ const fieldValue = admin.firestore.FieldValue
 export const syncMenuToProgrammes = functions.firestore
   .document('programmes/{programmeId}')
   .onWrite((change, context) => {
-    updateMenu(change, context.params.programmeId, 'programme')
+    return updateMenu(change, context.params.programmeId, 'programme')
   })
 
 export const syncMenuToPages = functions.firestore
   .document('pages/{pageId}')
   .onWrite((change, context) => {
-    updateMenu(change, context.params.pageId, 'programme')
+    return updateMenu(change, context.params.pageId, 'programme')
   })
 
 function updateMenu (docChange: functions.Change<DocumentSnapshot>, itemId: string, itemType: string) {
