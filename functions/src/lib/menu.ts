@@ -24,11 +24,11 @@ function updateMenu (docChange: functions.Change<DocumentSnapshot>, itemId: stri
 
   const oldMenuPath = oldDoc ? `settings/${oldDoc.status}Menu` : ''
   const newMenuPath = newDoc ? `settings/${newDoc.status}Menu` : ''
-  const itemPath = `items/${itemId}`
+  const itemPath = `items.${itemId}`
 
   // CREATE
   if (!oldDoc) {
-    return db.doc(newMenuPath).update({ [`${itemPath}/title`]: (newDoc || {}).title, [`${itemPath}/type`]: itemType })
+    return db.doc(newMenuPath).update({ [`${itemPath}.title`]: (newDoc || {}).title, [`${itemPath}.type`]: itemType })
   }
 
   // DELETE
@@ -40,12 +40,12 @@ function updateMenu (docChange: functions.Change<DocumentSnapshot>, itemId: stri
   if (newDoc.status !== oldDoc.status) {
     const batch = db.batch()
     batch.update(db.doc(oldMenuPath), { [itemPath]: fieldValue.delete() })
-    batch.update(db.doc(newMenuPath), { [`${itemPath}/title`]: newDoc.title, [`${itemPath}/type`]: itemType })
+    batch.update(db.doc(newMenuPath), { [`${itemPath}.title`]: newDoc.title, [`${itemPath}.type`]: itemType })
     return batch.commit()
   }
 
   if (newDoc.title !== oldDoc.title) {
-    return db.doc(newMenuPath).update({ [`${itemPath}/title`]: newDoc.title })
+    return db.doc(newMenuPath).update({ [`${itemPath}.title`]: newDoc.title })
   }
 
   return null
