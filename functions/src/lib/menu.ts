@@ -13,7 +13,7 @@ export const syncMenuToProgrammes = functions.firestore
 export const syncMenuToPages = functions.firestore
   .document('pages/{pageId}')
   .onWrite((change, context) => {
-    return updateMenu(change, context.params.pageId, 'programme')
+    return updateMenu(change, context.params.pageId, 'page')
   })
 
 function updateMenu (docChange: functions.Change<DocumentSnapshot>, itemId: string, itemType: string) {
