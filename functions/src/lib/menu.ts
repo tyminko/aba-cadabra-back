@@ -2,15 +2,16 @@ import * as functions from 'firebase-functions'
 import { db } from './db'
 import * as admin from 'firebase-admin'
 import {DocumentSnapshot} from "firebase-functions/lib/providers/firestore"
+
 const fieldValue = admin.firestore.FieldValue
 
-export const syncMenuToProgrammes = functions.firestore
+export const syncToProgrammes = functions.firestore
   .document('programmes/{programmeId}')
   .onWrite((change, context) => {
     return updateMenu(change, context.params.programmeId, 'programme')
   })
 
-export const syncMenuToPages = functions.firestore
+export const syncToPages = functions.firestore
   .document('pages/{pageId}')
   .onWrite((change, context) => {
     return updateMenu(change, context.params.pageId, 'page')
@@ -20,33 +21,40 @@ function updateMenu (docChange: functions.Change<DocumentSnapshot>, itemId: stri
   const oldDoc = docChange.before.exists ? docChange.before.data() : null
   const newDoc = docChange.after.exists ? docChange.after.data() : null
 
-  if (!oldDoc && !newDoc) return
+  const oldMenuPath = menuPath(oldDoc)
+  const newMenuPath = menuPath(newDoc)
 
-  const oldMenuPath = oldDoc ? `settings/${oldDoc.status}Menu` : ''
-  const newMenuPath = newDoc ? `settings/${newDoc.status}Menu` : ''
+  if(!oldMenuPath && !newMenuPath) return null
+
   const itemPath = `items.${itemId}`
 
-  // CREATE
-  if (!oldDoc) {
-    return db.doc(newMenuPath).update({ [`${itemPath}.title`]: (newDoc || {}).title, [`${itemPath}.type`]: itemType })
-  }
-
   // DELETE
-  if (!newDoc || newDoc.status === 'draft' || newDoc.status === 'trash') {
+  if (!newMenuPath && oldMenuPath) {
     return db.doc(oldMenuPath).update({ [itemPath]: fieldValue.delete() })
   }
+  if (newDoc) {
+    // CREATE
+    if (!oldMenuPath && newMenuPath) {
+      return db.doc(newMenuPath).update({[`${itemPath}.title`]: newDoc.title, [`${itemPath}.type`]: itemType})
+    }
 
-  // UPDATE
-  if (newDoc.status !== oldDoc.status) {
-    const batch = db.batch()
-    batch.update(db.doc(oldMenuPath), { [itemPath]: fieldValue.delete() })
-    batch.update(db.doc(newMenuPath), { [`${itemPath}.title`]: newDoc.title, [`${itemPath}.type`]: itemType })
-    return batch.commit()
-  }
+    // UPDATE
+    if (oldMenuPath !== newMenuPath) {
+      const batch = db.batch()
+      batch.update(db.doc(oldMenuPath), {[itemPath]: fieldValue.delete()})
+      batch.update(db.doc(newMenuPath), {[`${itemPath}.title`]: newDoc.title, [`${itemPath}.type`]: itemType})
+      return batch.commit()
+    }
 
-  if (newDoc.title !== oldDoc.title) {
-    return db.doc(newMenuPath).update({ [`${itemPath}.title`]: newDoc.title })
+    if (oldDoc && newDoc.title !== oldDoc.title) {
+      return db.doc(newMenuPath).update({[`${itemPath}.title`]: newDoc.title})
+    }
   }
 
   return null
+}
+
+function menuPath (doc?: admin.firestore.DocumentData|null): string {
+  if (!doc) return ''
+  return doc.status === 'public' || doc.status === 'internal' ? `settings/${doc.status}Menu` : ''
 }
