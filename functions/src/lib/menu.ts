@@ -35,7 +35,11 @@ function updateMenu (docChange: functions.Change<DocumentSnapshot>, itemId: stri
   if (newDoc) {
     // CREATE
     if (!oldMenuPath && newMenuPath) {
-      return db.doc(newMenuPath).update({[`${itemPath}.title`]: newDoc.title, [`${itemPath}.type`]: itemType})
+      return db.doc(newMenuPath).update({
+        [`${itemPath}.id`]: itemId,
+        [`${itemPath}.title`]: newDoc.title,
+        [`${itemPath}.type`]: itemType
+      })
     }
 
     // UPDATE
