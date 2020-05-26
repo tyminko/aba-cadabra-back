@@ -3,6 +3,8 @@ import { db } from './db'
 import * as admin from 'firebase-admin'
 import {DocumentSnapshot} from "firebase-functions/lib/providers/firestore"
 
+type menuDoc = admin.firestore.DocumentData
+
 const fieldValue = admin.firestore.FieldValue
 
 export const syncToProgrammes = functions.firestore
@@ -32,33 +34,58 @@ function updateMenu (docChange: functions.Change<DocumentSnapshot>, itemId: stri
   if (!newMenuPath && oldMenuPath) {
     return db.doc(oldMenuPath).update({ [itemPath]: fieldValue.delete() })
   }
-  if (newDoc) {
-    // CREATE
-    if (!oldMenuPath && newMenuPath) {
-      return db.doc(newMenuPath).update({
-        [`${itemPath}.id`]: itemId,
-        [`${itemPath}.title`]: newDoc.title,
-        [`${itemPath}.type`]: itemType
-      })
-    }
 
-    // UPDATE
-    if (oldMenuPath !== newMenuPath) {
-      const batch = db.batch()
-      batch.update(db.doc(oldMenuPath), {[itemPath]: fieldValue.delete()})
-      batch.update(db.doc(newMenuPath), {[`${itemPath}.title`]: newDoc.title, [`${itemPath}.type`]: itemType})
-      return batch.commit()
-    }
+  if (!newDoc) return null
 
-    if (oldDoc && newDoc.title !== oldDoc.title) {
-      return db.doc(newMenuPath).update({[`${itemPath}.title`]: newDoc.title})
+  // CREATE
+  if (!oldMenuPath && newMenuPath) {
+    return db.doc(newMenuPath).update(newItemFields(itemId, itemType, newDoc))
+  }
+
+  // MOVE TO ANOTHER MENU
+  if (oldMenuPath !== newMenuPath) {
+    const batch = db.batch()
+    batch.update(db.doc(oldMenuPath), {[itemPath]: fieldValue.delete()})
+    batch.update(db.doc(newMenuPath), newItemFields(itemId, itemType, newDoc))
+    return batch.commit()
+  }
+
+  // UPDATE
+  if (oldDoc) {
+    const updatedFields = updatedItemFields(itemPath, itemType, newDoc, oldDoc)
+    if (updatedFields) {
+      return db.doc(newMenuPath).update(updatedFields)
     }
   }
 
   return null
 }
 
-function menuPath (doc?: admin.firestore.DocumentData|null): string {
+function menuPath (doc?: menuDoc|null): string {
   if (!doc) return ''
   return doc.status === 'public' || doc.status === 'internal' ? `settings/${doc.status}Menu` : ''
+}
+
+function newItemFields (itemId: string, itemType: string, newDoc: menuDoc) {
+  const itemPath = `items.${itemId}`
+  const newFields = {
+    [`${itemPath}.id`]: itemId,
+    [`${itemPath}.title`]: newDoc.title,
+    [`${itemPath}.type`]: itemType
+  }
+  if (itemType === 'programme') {
+    newFields[`${itemPath}.singlePostLabel`] = newDoc.singlePostLabel
+  }
+  return newFields
+}
+
+function updatedItemFields (itemPath: string, itemType: string, newDoc: menuDoc, oldDoc: menuDoc) {
+  const fields: {[k:string]: any} = {}
+  if (newDoc.title !== oldDoc.title) {
+    fields[`${itemPath}.title`] = newDoc.title
+  }
+  if (itemType === 'programme' && newDoc.singlePostLabel !== oldDoc.singlePostLabel) {
+    fields[`${itemPath}.singlePostLabel`] = newDoc.singlePostLabel
+  }
+  return Object.keys(fields).length ? fields : null
 }
