@@ -68,7 +68,7 @@ export const make = functions.https.onCall(async (data:ReservationData, context)
     uid: context.auth.uid,
     name: data.name || null,
     email: data.email,
-    token: randomString() + base64(new Date().getTime().toString()) + reservationId,
+    token: randomString(12, false) + base64(new Date().getTime().toString()) + reservationId,
     status: 'pending',
   }
   const eventRef = db.collection('posts').doc(data.eventId)
@@ -145,12 +145,12 @@ function reservationHTML (resData: ReservationData): string {
   return html
 }
 
-function randomString (length = 12) {
+function randomString (length = 12, withSpecialChars = true) {
   const randCharFromStr = (str: string): string => str.charAt(Math.floor(Math.random() * str.length))
   const lows = 'abcdefghijklmnopqrstuvwxyz'
   const caps = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   const numbers = '0123456789'
-  const specials = '~-_@#*+='
+  const specials = withSpecialChars ? '~-_@#*+=' : ''
   const charset = lows + specials + caps + numbers
   let checkLow, checkCap, checkNum, checkSpecial
   let retVal = ''
